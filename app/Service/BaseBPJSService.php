@@ -1,6 +1,7 @@
 <?php 
     namespace App\Service;
 
+use App\Service\Traits\BPJSSecurityTrait;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Http;
         protected $consId;
         protected $secretKey;
         protected $userKey;
+
+        protected $lastTimestamp;
 
         public function __construct(array $config)
         {
@@ -28,6 +31,8 @@ use Illuminate\Support\Facades\Http;
             $timestamp = $this->generateTimestamp();
             $signature = $this->generateSignature($this->consId, $this->secretKey, $timestamp);
 
+            $this->lastTimestamp = $timestamp;
+
             return [
                 'X-cons-id' => $this->consId,
                 'X-timestamp' => $timestamp,
@@ -37,15 +42,38 @@ use Illuminate\Support\Facades\Http;
             ];
         }
 
-        protected function responseData(array $response): array
+        public function responseData(array $response): array
         {
             if (isset($response['response']) && is_string($response['response'])) {
-                $encryptedData = $response['response'];
-                $decryptedData = $this->decryptData($encryptedData, $this->secretKey);
-                $decompressedData = $this->decompressData($decryptedData);
-                return json_decode($decompressedData, true);
+                try {
+                    $encryptedData = $response['response'];
+                    $key = $this->consId . $this->secretKey . $this->lastTimestamp;
+                    
+                    $decryptedData = $this->decryptData($key, $encryptedData);
+                    
+                    if ($decryptedData === false) {
+                        throw new \Exception("Dekripsi data BPJS gagal. Pastikan Secret Key dan Waktu Server (UTC) sudah benar.");
+                    }
+                    
+                    $decompressedData = $this->decompressData($decryptedData);
+                    if (empty($decompressedData)) {
+                        throw new \Exception("Dekompresi data BPJS gagal.");
+                    }
+
+                    $result = json_decode($decompressedData, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        throw new \Exception("JSON Decode gagal: " . json_last_error_msg());
+                    }
+
+                    return $result;
+                    
+                } catch (\Throwable $e) {
+                    throw new \Exception("Gagal memproses respons terenkripsi: " . $e->getMessage());
+                }
             }
-            return $response;
+            
+            return $response; 
         }
 
         protected function getRequest(string $endpoint, array $query=[]): array

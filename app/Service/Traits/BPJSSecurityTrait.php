@@ -1,5 +1,5 @@
 <?php 
-    namespace App\Service;
+    namespace App\Service\Traits;
 
     use Exception;
 
@@ -24,14 +24,24 @@
             }
         }
 
-        protected function decryptData($encryptedData, $secretKey)
+        protected function decryptData($key, $encryptedData): string|false
         {
             try {
                 $method = 'AES-256-CBC';
-                $keyHashed = hex2bin(hash('sha256', $secretKey));
+                $keyHashed = hex2bin(hash('sha256', $key));
                 $iv = substr($keyHashed, 0, 16);
                 $decodedData = base64_decode($encryptedData);
+
+                if ($decodedData === false) {
+                    throw new Exception("Base64 Decode gagal.");
+                }
+                
                 $decryptedData = openssl_decrypt($decodedData, $method, $keyHashed, OPENSSL_RAW_DATA, $iv);
+                
+                if ($decryptedData === false) {
+                    return false;
+                }
+
                 return $decryptedData;
             } catch (Exception $e) {
                 throw new Exception("Error decrypting data: " . $e->getMessage());

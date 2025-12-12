@@ -15,5 +15,11 @@
             return $this->getRequest($endpoint);
         }
 
+        public function referensiDiagnosa(string $diagnosa): array
+        {
+            $endpoint = "referensi/diagnosa/{$diagnosa}";
+            return $this->getRequest($endpoint);
+        }
+
     }
 ?>
